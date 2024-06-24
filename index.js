@@ -14,7 +14,7 @@ const stripe = require("stripe")(
 //middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174" , "https://pet-house-bd.web.app" ,"https://pet-house-bd.firebaseapp.com" ],
+    origin: ["http://localhost:5173", "http://localhost:5174" , "https://pet-house-bd.web.app" ,"https://pet-house-bd.firebaseapp.com" ,"https://66793388235f9b6b60a5c292--luxury-pasca-b89b35.netlify.app"],
     credentials: true,
   })
 );
