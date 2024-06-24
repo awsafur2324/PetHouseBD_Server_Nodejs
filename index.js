@@ -12,7 +12,7 @@ const stripe = require("stripe")(process.env.Stripe_Secret_Key);
 //middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174", ],
+    origin: ["http://localhost:5173", "http://localhost:5174", "https://66797bb9235f9bb1d8a5c340--splendorous-trifle-6f2238.netlify.app" ],
     credentials: true,
   })
 );
