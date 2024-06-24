@@ -7,14 +7,12 @@ const cookieParser = require("cookie-parser");
 const app = express();
 const port = process.env.PORT || 5000;
 const axios = require("axios");
-const stripe = require("stripe")(
-  "sk_test_51PR83HAjQxNyQ8cOHwzZpnUFx61Ulad4A7BqCioKXISGhorYFeowuFjcq0TIMftCT1qcNV0qTM9XOlaCIMkpOk4I004NyDAKHT"
-);
+const stripe = require("stripe")(process.env.Stripe_Secret_Key);
 
 //middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174" , "https://pet-house-bd.web.app" ,"https://pet-house-bd.firebaseapp.com" ,"https://66793388235f9b6b60a5c292--luxury-pasca-b89b35.netlify.app"],
+    origin: ["http://localhost:5173", "http://localhost:5174", ],
     credentials: true,
   })
 );
@@ -35,7 +33,7 @@ const client = new MongoClient(uri, {
 const cookieOptions = {
   httpOnly: true,
   sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-  secure: process.env.NODE_ENV === "production" ? true  : false,
+  secure: process.env.NODE_ENV === "production" ? true : false,
 };
 async function run() {
   try {
@@ -61,12 +59,11 @@ async function run() {
       jwt.verify(token, process.env.Access_Token_Secret, (err, decoded) => {
         //error
         if (err) {
-         
           return res.status(401).send({ message: "Not Authorize" });
         }
 
         //if token is valid the decoded means the email which send in /jwt api
-       
+
         //if the token is valid then the token data set on user_email(we can create any name)
         req.user_email = decoded;
         next();
@@ -90,7 +87,7 @@ async function run() {
     //access token always create when a user log in in our system
     app.post("/jwt", async (req, res) => {
       const user = req.body;
-     
+
       const token = jwt.sign(user, process.env.Access_Token_Secret, {
         expiresIn: "1h",
       });
@@ -98,14 +95,14 @@ async function run() {
       //   httpOnly: true,
       //   secure: false, // when in production set true
       // }
-      res
-        .cookie("token", token, cookieOptions)
-        .send({ success: true });
+      res.cookie("token", token, cookieOptions).send({ success: true });
     });
     //clear the access token when user log out
     app.post("/logout", async (req, res) => {
       const user = req.body;
-      res.clearCookie("token", { ...cookieOptions , maxAge: 0 }).send({ Logout_Success: true });
+      res
+        .clearCookie("token", { ...cookieOptions, maxAge: 0 })
+        .send({ Logout_Success: true });
     });
     //=======================================Admin Api========================================
     //--------------------------------------Check the Admin ----------------------------
@@ -175,7 +172,7 @@ async function run() {
     app.patch("/MakeBan/:email", verifyToken, verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const Status = req.query.status == "Ban" ? "Active" : "Ban";
-    
+
       const filter = { email: email };
 
       const updateDoc = {
@@ -216,7 +213,7 @@ async function run() {
       async (req, res) => {
         const id = req.params.id;
         const Adopted = req.query.Adopted === "true" ? false : true;
-       
+
         const query = {
           _id: new ObjectId(id),
         };
@@ -283,112 +280,117 @@ async function run() {
       res.send({ count: result });
     });
     //--------------------------------User Dashboard area Chart Data create
-    app.get("/AllDonationHistory_Admin", verifyToken, async (req, res) => {
-      //find All Donation of user
-      const query = {};
-      const option = {
-        projection: {
-          _id: 1,
-        },
-      };
-      const DonateID = await DonationCampaigns.find(query, option).toArray();
-
-      let Donate = [];
-      let refund = [];
-      //find donate money based on DonateID
-      for (const item of DonateID) {
-        const query3 = { DonationItem_ID: item._id.toHexString() };
-        const option3 = {
+    app.get(
+      "/AllDonationHistory_Admin",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        //find All Donation of user
+        const query = {};
+        const option = {
           projection: {
-            _id: 0,
-            amount: 1,
-            user_name: 1,
-            date: 1,
+            _id: 1,
           },
         };
-        const DonateData = await DonateMoneyCollection.find(
-          query3,
-          option3
-        ).toArray();
+        const DonateID = await DonationCampaigns.find(query, option).toArray();
 
-        const RefundData = await RefundCollection.find(
-          query3,
-          option3
-        ).toArray();
+        let Donate = [];
+        let refund = [];
+        //find donate money based on DonateID
+        for (const item of DonateID) {
+          const query3 = { DonationItem_ID: item._id.toHexString() };
+          const option3 = {
+            projection: {
+              _id: 0,
+              amount: 1,
+              user_name: 1,
+              date: 1,
+            },
+          };
+          const DonateData = await DonateMoneyCollection.find(
+            query3,
+            option3
+          ).toArray();
 
-        for (const item of DonateData) {
-          Donate.push(item);
-        }
-        for (const item of RefundData) {
-          refund.push(item);
-        }
-      }
-      //now combine all Donate data based on same date
-      const combineDonate = [];
-      const DonateDetails = [];
-      let Total = 0;
-      for (let item of Donate) {
-        const date = item.date.split("T")[0];
-        const data = Donate.some((item) => {
-          if (item.date.split("T")[0] === date) {
-            Total += item.amount;
+          const RefundData = await RefundCollection.find(
+            query3,
+            option3
+          ).toArray();
+
+          for (const item of DonateData) {
+            Donate.push(item);
           }
-        });
-        Total = Total / 100;
-        combineDonate.push({ date: date, Donate: Total });
-        DonateDetails.push({
-          date: date,
-          amount: item.amount / 100,
-          user_name: item.user_name,
-          refund: false,
-        });
-        Total = 0;
-      }
-
-      //now combine all Refund data based on same date
-      for (let item of refund) {
-        const date = item.date.split("T")[0];
-        const data = refund.some((item) => {
-          if (item.date.split("T")[0] === date) {
-            Total += item.amount;
+          for (const item of RefundData) {
+            refund.push(item);
           }
-        });
-        Total = Total / 100;
-        combineDonate.push({ date: date, Refund: Total });
-        DonateDetails.push({
-          date: date,
-          amount: item.amount / 100,
-          user_name: item.user_name,
-          refund: true,
-        });
-        Total = 0;
-      }
-      //Remove Duplicate data
-      const uniqueData = Array.from(
-        new Set(combineDonate.map(JSON.stringify))
-      ).map(JSON.parse);
-
-      const combinedData = {};
-
-      // Combine data based on date
-      uniqueData.forEach((entry) => {
-        const { date, Donate = 0, Refund = 0 } = entry;
-        if (!combinedData[date]) {
-          combinedData[date] = { date, Donate: 0, Refund: 0 };
         }
-        combinedData[date].Donate += Donate;
-        combinedData[date].Refund += Refund;
-      });
+        //now combine all Donate data based on same date
+        const combineDonate = [];
+        const DonateDetails = [];
+        let Total = 0;
+        for (let item of Donate) {
+          const date = item.date.split("T")[0];
+          const data = Donate.some((item) => {
+            if (item.date.split("T")[0] === date) {
+              Total += item.amount;
+            }
+          });
+          Total = Total / 100;
+          combineDonate.push({ date: date, Donate: Total });
+          DonateDetails.push({
+            date: date,
+            amount: item.amount / 100,
+            user_name: item.user_name,
+            refund: false,
+          });
+          Total = 0;
+        }
 
-      // Convert the combined data object back to an array
-      const result = Object.values(combinedData);
-      // Sort the result array by date
-      result.sort((a, b) => new Date(a.date) - new Date(b.date));
-      DonateDetails.sort((a, b) => new Date(b.date) - new Date(a.date));
+        //now combine all Refund data based on same date
+        for (let item of refund) {
+          const date = item.date.split("T")[0];
+          const data = refund.some((item) => {
+            if (item.date.split("T")[0] === date) {
+              Total += item.amount;
+            }
+          });
+          Total = Total / 100;
+          combineDonate.push({ date: date, Refund: Total });
+          DonateDetails.push({
+            date: date,
+            amount: item.amount / 100,
+            user_name: item.user_name,
+            refund: true,
+          });
+          Total = 0;
+        }
+        //Remove Duplicate data
+        const uniqueData = Array.from(
+          new Set(combineDonate.map(JSON.stringify))
+        ).map(JSON.parse);
 
-      // Send the result as the response
-      res.send({ result, DonateDetails });
-    });
+        const combinedData = {};
+
+        // Combine data based on date
+        uniqueData.forEach((entry) => {
+          const { date, Donate = 0, Refund = 0 } = entry;
+          if (!combinedData[date]) {
+            combinedData[date] = { date, Donate: 0, Refund: 0 };
+          }
+          combinedData[date].Donate += Donate;
+          combinedData[date].Refund += Refund;
+        });
+
+        // Convert the combined data object back to an array
+        const result = Object.values(combinedData);
+        // Sort the result array by date
+        result.sort((a, b) => new Date(a.date) - new Date(b.date));
+        DonateDetails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Send the result as the response
+        res.send({ result, DonateDetails });
+      }
+    );
 
     //------------------------------------ Amin Dashboard Pie Chart Data create
     app.get("/userDetails", verifyToken, verifyAdmin, async (req, res) => {
@@ -400,7 +402,7 @@ async function run() {
       const activeUsers = await RegisterUser.countDocuments(query);
       result.push({
         name: "Active Members",
-        value : activeUsers,
+        value: activeUsers,
       });
 
       //find the inactive users
@@ -422,31 +424,31 @@ async function run() {
         // Check if the last login date is before one week ago
         if (lastLoginDate < oneWeekAgo) {
           inactiveUsersCount++;
-        } 
+        }
       }
       result.push({
         name: "Inactive Members",
-        value : inactiveUsersCount,
-      })
+        value: inactiveUsersCount,
+      });
       //Find the total number of users
       const totalUsers = await RegisterUser.countDocuments();
       result.push({
         name: "All Members",
-        value : totalUsers,
+        value: totalUsers,
       });
       //Total Users
       const Users = await RegisterUser.countDocuments({ role: "user" });
       result.push({
         name: "User",
-        value : Users,
+        value: Users,
       });
       //Total Admin from the users
       const totalAdmin = await RegisterUser.countDocuments({ role: "Admin" });
       result.push({
         name: "Admin",
-        value : totalAdmin,
+        value: totalAdmin,
       });
-      
+
       res.send({ result });
     });
     //======================================  All Api ============================
@@ -463,7 +465,7 @@ async function run() {
       const email = req.params.email;
       const page = parseInt(req.query.page);
       const size = parseInt(req.query.limit);
-  
+
       const query = { Author_email: email };
       const result = await PetsCollection.find(query)
         .skip(page * size)
